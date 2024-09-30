@@ -1,6 +1,7 @@
 /* eslint-disable import/no-unresolved */
 
 // import type { Config } from '@netlify/edge-functions';
+
 import { CacheHeaders } from 'cdn-cache-control';
 import { Hono, type Context } from 'hono';
 import { cors as corsMiddleware } from 'hono/cors';
@@ -11,8 +12,11 @@ import { createPublicClient, http, type PublicClient } from 'viem';
 import { mainnet } from 'viem/chains';
 import { normalize as normalizeEns } from 'viem/ens';
 
-// const app = new Hono().basePath('/api');
-export const app = new Hono();
+type Bindings = {
+  FOOBAR: string;
+};
+
+export const app = new Hono<{ Bindings: Bindings }>();
 
 export const BASE_API_URL = 'https://api.ethscriptions.com/v2';
 export const CACHE_TTL = 300;
@@ -126,7 +130,13 @@ app.use(secureHeaders());
 // app.get('/ethscriptions/:id/number', permaCache); // ethscription_number and other static numbers
 // app.get('/ethscriptions/:id/index', permaCache); // alias of /number
 
-app.get('/', (ctx) => ctx.json({ endpoints: ENDPOINTS }));
+app.get('/', async (ctx) => {
+  const commitsha = ctx.env.FOOBAR;
+  // const commitsha = await fs.readFile('./.commitsha', 'utf8');
+  console.log('commitsha', commitsha);
+  // console.log('process.env', process.env.CLOUDFLARE_ACCOUNT_ID);
+  return ctx.json({ commitsha, endpoints: ENDPOINTS });
+});
 
 app.get('/check/:sha', checkExistHandler);
 app.get('/exists/:sha', checkExistHandler);
