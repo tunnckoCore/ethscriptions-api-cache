@@ -13,7 +13,7 @@ import { mainnet } from 'viem/chains';
 import { normalize as normalizeEns } from 'viem/ens';
 
 type Bindings = {
-  FOOBAR: string;
+  GH_COMMIT_SHA: string;
 };
 
 export const app = new Hono<{ Bindings: Bindings }>();
@@ -131,7 +131,7 @@ app.use(secureHeaders());
 // app.get('/ethscriptions/:id/index', permaCache); // alias of /number
 
 app.get('/', async (ctx) => {
-  const commitsha = ctx.env.FOOBAR;
+  const commitsha = ctx.env.GH_COMMIT_SHA;
   // const commitsha = await fs.readFile('./.commitsha', 'utf8');
   console.log('commitsha', commitsha);
   // console.log('process.env', process.env.CLOUDFLARE_ACCOUNT_ID);
