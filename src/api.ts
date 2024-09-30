@@ -19,7 +19,7 @@ type Bindings = {
 export const app = new Hono<{ Bindings: Bindings }>();
 
 export const BASE_API_URL = 'https://api.ethscriptions.com/v2';
-export const CACHE_TTL = 300;
+export const CACHE_TTL = 3600 * 24;
 export const DEFAULT_ENS_HANDLER = onchainEnsHandler;
 
 export const ENDPOINTS = [
