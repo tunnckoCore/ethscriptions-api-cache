@@ -40,7 +40,7 @@ export const ENDPOINTS = [
   'Resolve names - if it ends with com|lol|xyz|bg|info|net|id|org it is considered off-chain ENS',
   '',
   '/resolve/:name - find Ethereum address for any ENS (on-chain or off-chain name) or Ethscription Name',
-  '/resolve/wgw - an Ethscription Name',
+  '/resolve/wgw - find the current owner of an Ethscription Name',
   '/resolve/wgw.lol - if it cannot resolve as off-chain ENS, tries to resolve the Ethscription name',
   '/resolve/foo.bar - resolves nothing, there is no such Ethscription name',
   '/resolve/foo.com - resolves nothing, there is no such off-chain ENS name, nor Ethscription name',
@@ -50,6 +50,8 @@ export const ENDPOINTS = [
   '/resolve/gregskril.com - an off-chain ENS name',
   '/resolve/mfers.base.eth - an on-chain ENS name',
   '/resolve/tunnckocore.eth - on-chain ENS name',
+  '/resolve/wgw?creator=true - find the creator of this Ethscription Name (hirsh)',
+  '/resolve/wgw - defaults to resolving current owner',
   '/resolve/dubie.eth',
   '/resolve/jesse.base.eth',
   '',
@@ -280,6 +282,7 @@ app.get('/profiles/:name', resolveHandler);
 
 async function resolveHandler(ctx: Context) {
   // const url = new URL(ctx.req.url);
+  const checkCreator = ctx.req.query('creator') || '';
   const name = ctx.req.param('name').toLowerCase();
 
   const publicClient = createPublicClient({
@@ -287,7 +290,9 @@ async function resolveHandler(ctx: Context) {
     transport: http(),
   });
 
-  const address = (await nameResolver(name, DEFAULT_ENS_HANDLER, publicClient)).toLowerCase();
+  const address = (
+    await nameResolver(name, DEFAULT_ENS_HANDLER, { checkCreator, publicClient })
+  ).toLowerCase();
 
   return ctx.json(
     {
@@ -476,19 +481,34 @@ export async function initialNormalize(ctx, alternativeUrl?: URL) {
   return { result, pagination, ifNoneMatch, withContentUri, url, id };
 }
 
-export async function onchainEnsHandler(val: string, publicClient: PublicClient) {
-  return publicClient.getEnsAddress({
+export async function onchainEnsHandler(
+  val: string,
+  options: {
+    checkCreator: string | undefined;
+    publicClient: PublicClient;
+  },
+) {
+  const opts = { ...options };
+  return opts.publicClient.getEnsAddress({
     name: normalizeEns(val),
   });
 }
 
-export async function nameResolver(value: string, ensHandler?: any, publicClient?: PublicClient) {
+export async function nameResolver(
+  value: string,
+  ensHandler?: any,
+  options?: {
+    checkCreator: string | undefined;
+    publicClient?: PublicClient;
+  },
+) {
+  const opts = { ...options };
   const val = value.toLowerCase();
   const handler = ensHandler || DEFAULT_ENS_HANDLER;
 
   if (/\.(com|lol|xyz|bg|info|net|id|org|eth$)/.test(val)) {
     try {
-      const address = await handler(val, publicClient);
+      const address = await handler(val, opts);
 
       if (address) {
         return address;
@@ -506,7 +526,8 @@ export async function nameResolver(value: string, ensHandler?: any, publicClient
   console.log({ val, nameUri, nameSha, resp });
 
   if (resp.result.exists) {
-    return resp.result.ethscription.current_owner.toLowerCase();
+    const eth = resp.result.ethscription;
+    return (opts.checkCreator ? eth.creator : eth.current_owner).toLowerCase();
   }
 
   return val;

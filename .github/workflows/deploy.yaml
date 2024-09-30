@@ -23,4 +23,4 @@ jobs:
           wranglerVersion: 'latest'
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --var COMMIT_SHA:${{ github.sha }}
+          command: deploy --minify --var COMMIT_SHA:${{ github.sha }}
