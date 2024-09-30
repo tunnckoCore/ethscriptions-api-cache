@@ -19,7 +19,7 @@ type Bindings = {
 export const app = new Hono<{ Bindings: Bindings }>();
 
 export const BASE_API_URL = 'https://api.ethscriptions.com/v2';
-export const CACHE_TTL = 3600 * 24;
+export const CACHE_TTL = 500;
 export const DEFAULT_ENS_HANDLER = onchainEnsHandler;
 
 export const ENDPOINTS = [
@@ -142,11 +142,11 @@ app.get('/', async (ctx) => {
   });
 });
 
-app.get('/check/:sha', checkExistHandler);
-app.get('/exists/:sha', checkExistHandler);
+app.get('/check/:sha', (ctx) => checkExistHandler(ctx));
+app.get('/exists/:sha', (ctx) => checkExistHandler(ctx));
 
-export async function checkExistHandler(ctx: Context) {
-  const sha = ctx.req.param('sha').replace('0x', '');
+export async function checkExistHandler(ctx: Context, _sha?: string) {
+  const sha = _sha || ctx.req.param('sha').replace('0x', '');
 
   if (!sha || sha.length !== 64 || !/^[\dA-Fa-f]{64,}$/.test(sha)) {
     return ctx.json(
@@ -166,10 +166,13 @@ export async function checkExistHandler(ctx: Context) {
 
   if (resp.result.exists) {
     const eth = resp.result.ethscription;
-    return ctx.json({ result: { exists: true, ethscription: normalizeResult(eth) } });
+    return ctx.json(
+      { result: { exists: true, ethscription: normalizeResult(eth) } },
+      { headers: getHeaders(CACHE_TTL) },
+    );
   }
 
-  return ctx.json({ result: { exists: false } }, { headers: getHeaders(CACHE_TTL) });
+  return ctx.json({ result: { exists: false } });
 }
 
 // generate SHA-256 of a given base64-ed (or not, eg. raw "data:,wgw") data URI string.
@@ -186,8 +189,6 @@ export async function getSha256ForData(ctx: Context) {
   // if not in params, check query param `of=<base64_or_raw>`
   if (!dataB64) {
     dataB64 = ctx.req.query('of') || '';
-
-    console.log('bro', { dataB64 });
   }
 
   // if neither in params nor query, return error
@@ -217,11 +218,12 @@ export async function getSha256ForData(ctx: Context) {
 
   const sha = await createDigest(data);
 
-  const url = new URL(ctx.req.url);
-  const { result } = (await fetch(`${url.origin}/check/${sha}`).then((x) => x.json())) as any;
+  const checkResp = await checkExistHandler(ctx, sha);
+  const { result } = (await checkResp.json()) as any;
 
   return ctx.json({ result: { sha, ...result } }, { headers: getHeaders(CACHE_TTL) });
 }
+
 app.get('/sha/:data?', getSha256ForData);
 
 app.get('/profiles/:name/created', profileHandler);
