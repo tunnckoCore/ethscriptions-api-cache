@@ -1,0 +1,20 @@
+{
+  // "extends": "astro/tsconfigs/strictest",
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": ["astro/tsconfigs/strictest", "eslint-config-tunnckocore/tsconfig.json"],
+  "include": ["src", "**/*.ts"],
+  "exclude": ["node_modules", "dist"],
+  "compilerOptions": {
+    "module": "es2022",
+    "types": ["@cloudflare/workers-types/2023-07-01"],
+    "moduleResolution": "Bundler",
+    "target": "es2021",
+    "lib": ["es2021"],
+    "exactOptionalPropertyTypes": false,
+    "baseUrl": ".",
+    "strictNullChecks": true, // add if using `base` template
+    "allowJs": true, // required, and included with all Astro templates
+    "noUnusedParameters": false,
+    "noUnusedLocals": false
+  }
+}

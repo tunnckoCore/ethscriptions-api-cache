@@ -1,0 +1,51 @@
+{
+  "editor.quickSuggestions": {
+    "other": "on",
+    "comments": "off",
+    "strings": "off"
+  },
+  "explorer.excludeGitIgnore": false,
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "editor.inlineSuggest.enabled": true,
+  "github.copilot.enable": {
+    "*": true,
+    "yaml": false,
+    "plaintext": false,
+    "markdown": true,
+    "javascript": true,
+    "typescript": true,
+    "python": true
+  },
+  "editor.rulers": [80, 100, 120],
+  "files.autoSave": "onFocusChange",
+  "javascript.preferences.importModuleSpecifierEnding": "js",
+  "typescript.preferences.importModuleSpecifierEnding": "js",
+  "editor.formatOnType": false,
+  "editor.formatOnPaste": false,
+  "editor.formatOnSave": true,
+  "editor.formatOnSaveMode": "file",
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "always",
+    "source.fixAll.eslint": "always",
+    "source.fixAll.prettier": "always",
+    "source.organizeImports": "always"
+    // "source.fixAll.biome": "always",
+    // "source.organizeImports.biome": "always",
+    // "quickfix.biome": "always"
+  },
+  "[markdown]": {
+    "files.trimTrailingWhitespace": false,
+    "files.insertFinalNewline": false
+  },
+  // "editor.defaultFormatter": "esbenp.prettier-vscode",
+  // "[javascript]": {
+  //   "editor.defaultFormatter": "esbenp.prettier-vscode"
+  // },
+  // "prettier.documentSelectors": [
+  //   "**/*.{js,mjs,ts,jsx,tsx,astro,svelte}"
+  // ]
+  "editor.defaultFormatter": "rvest.vs-code-prettier-eslint",
+  "[javascript]": {
+    "editor.defaultFormatter": "rvest.vs-code-prettier-eslint"
+  }
+}
