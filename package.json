@@ -1,6 +1,6 @@
 {
   "name": "@tunnckocore/ethscriptions-api-cache",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "license": "MPL-2.0",
   "description": "Ethscriptions API Cache Proxy. A Cloudflare Worker that caches and unifies Ethscriptions (or any other) API's responses, according to ESIP-9. Includes support for resolving ENS on-chain / off-chain names, and Ethscriptions names.",
   "author": "wgw <wgw@wgw.lol>",

@@ -224,6 +224,7 @@ app.get('/sha/:data?', getSha256ForData);
 
 app.get('/profiles/:name/created', profileHandler);
 app.get('/profiles/:name/own', profileHandler);
+app.get('/profiles/:name/owned', profileHandler);
 app.get('/profiles/:name/info', profileHandler);
 app.get('/profiles/:name/latest', profileHandler);
 
