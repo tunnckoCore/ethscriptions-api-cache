@@ -19,11 +19,8 @@ jobs:
       - name: Deploy
         uses: cloudflare/wrangler-action@v3
         with:
-          packageManager: npm
-          wranglerVersion: '3.78.12'
+          packageManager: bun
+          wranglerVersion: '3.x.x'
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --var COMMIT_SHA:${{ github.sha }}
-        # env:
-        #   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        #   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
