@@ -498,7 +498,7 @@ export async function nameResolver(
   value: string,
   ensHandler?: any,
   options?: {
-    checkCreator: string | undefined;
+    checkCreator?: string | undefined;
     publicClient?: PublicClient;
   },
 ) {
@@ -547,7 +547,7 @@ export async function resolveAddressPatches(url) {
   const params = await Promise.all(
     addressParams.map(async ([key, value]) => {
       // if it cannit resolve neither ENS, nor Ethscriptions Name, it passthrough the `value`
-      const val = await nameResolver(value, DEFAULT_ENS_HANDLER, publicClient);
+      const val = await nameResolver(value, DEFAULT_ENS_HANDLER, { publicClient });
 
       return [key, val];
     }),
