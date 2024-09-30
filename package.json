@@ -23,6 +23,11 @@
   "files": [
     "src"
   ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org",
+    "tag": "latest"
+  },
   "scripts": {
     "cf-typegen": "wrangler types",
     "deploy": "wrangler deploy",
