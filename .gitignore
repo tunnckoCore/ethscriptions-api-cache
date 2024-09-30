@@ -1,3 +1,4 @@
+.wrangler
 *.tsbuildinfo
 *.*cache
 .cache
