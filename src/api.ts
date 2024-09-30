@@ -134,7 +134,10 @@ app.get('/', async (ctx) => {
   const commitsha = ctx.env.COMMIT_SHA;
 
   // console.log('process.env', process.env.CLOUDFLARE_ACCOUNT_ID);
-  return ctx.json({ commitsha, endpoints: ENDPOINTS });
+  return ctx.json({
+    about: { source: 'https://github.com/tunnckocore/ethscriptions-api-cache', commit: commitsha },
+    endpoints: ENDPOINTS,
+  });
 });
 
 app.get('/check/:sha', checkExistHandler);
