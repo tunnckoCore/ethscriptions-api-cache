@@ -13,7 +13,7 @@ build
 dist
 
 # Package managers lockfiles
-package-lock.json
+#package-lock.json
 shrinkwrap.json
 pnpm-lock.json
 
