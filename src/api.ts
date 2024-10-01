@@ -463,7 +463,9 @@ export async function initialNormalize(ctx, alternativeUrl?: URL) {
   await searchParamPatches(url);
   if (url.searchParams.get('with_resolve')) {
     await resolveAddressPatches(url);
+    url.searchParams.delete('with_resolve');
   }
+
   const resp = await fetch(`${BASE_API_URL}/ethscriptions${id ? `/${id}` : ''}${url.search}`);
 
   if (!resp.ok) {
@@ -594,8 +596,9 @@ export function searchParamPatches(url) {
   }
 
   // support `is_esip6` instead of just `esip6` for consistency with fields and other ESIPs fiekds
+  // Note: no such `esip6` filter on upstream, i thought there is. But lets keep it for now
   if (url.searchParams.get('is_esip6')) {
-    url.searchParams.set('esip6', url.searchParams.get('is_esip6') || '');
+    url.searchParams.set('esip6', url.searchParams.get('is_esip6'));
     url.searchParams.delete('is_esip6');
   }
 
