@@ -19,7 +19,7 @@ type Bindings = {
 export const app = new Hono<{ Bindings: Bindings }>();
 
 export const BASE_API_URL = 'https://api.ethscriptions.com/v2';
-export const CACHE_TTL = 500;
+export const CACHE_TTL = 3600;
 export const DEFAULT_ENS_HANDLER = onchainEnsHandler;
 
 export const ENDPOINTS = [
@@ -376,7 +376,7 @@ async function ethscriptionSubHandler(ctx: Context) {
           previous: result.previous_owner,
         },
       },
-      // transfers can occure only after 5 blocks (60 seconds)
+      // transfers can occure only after 5 blocks (60 seconds, so 45s is fine)
       { headers: getHeaders(45) },
     );
   } else if (type && /number|index|stat|info/.test(type)) {
@@ -393,7 +393,7 @@ async function ethscriptionSubHandler(ctx: Context) {
           ethscription_number: result.ethscription_number,
           ethscription_number_fmt: numfmt(result.ethscription_number),
           ethscription_transfers: String(
-            result.ethscription_transfers.length > 1 ? result.ethscription_transfers.length : 0,
+            normalizeAndSortTransfers(result).filter((x) => x.is_esip0 === false).length,
           ),
         },
       },
