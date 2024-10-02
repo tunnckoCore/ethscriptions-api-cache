@@ -8,7 +8,7 @@ import { cors as corsMiddleware } from 'hono/cors';
 import { etag as etagMiddleware } from 'hono/etag';
 import { secureHeaders } from 'hono/secure-headers';
 import { trimTrailingSlash } from 'hono/trailing-slash';
-import { createPublicClient, http, type PublicClient } from 'viem';
+import { bytesToHex, createPublicClient, hexToBytes, http, type PublicClient } from 'viem';
 import { mainnet } from 'viem/chains';
 import { normalize as normalizeEns } from 'viem/ens';
 
@@ -20,7 +20,7 @@ export const app = new Hono<{ Bindings: Bindings }>();
 
 export const BASE_API_URL = 'https://api.ethscriptions.com/v2';
 export const CACHE_TTL = 3600;
-export const DEFAULT_ENS_HANDLER = onchainEnsHandler;
+export const DEFAULT_ENS_HANDLER = ensApiHandler;
 
 export const ENDPOINTS = [
   '',
@@ -287,25 +287,22 @@ async function resolveHandler(ctx: Context) {
   const checkCreator = ctx.req.query('creator') || '';
   const name = ctx.req.param('name').toLowerCase();
 
-  const publicClient = createPublicClient({
-    chain: mainnet,
-    transport: http(),
-  });
+  // const publicClient = createPublicClient({
+  //   chain: mainnet,
+  //   transport: http(),
+  // });
 
-  const address = (
-    await nameResolver(name, DEFAULT_ENS_HANDLER, { checkCreator, publicClient })
-  ).toLowerCase();
+  const resolveName = isAddress(name);
 
-  return ctx.json(
-    {
-      result: {
-        resolved: address !== name,
-        name,
-        address,
-      },
-    },
-    { headers: getHeaders(3600) },
-  );
+  const value = (await nameResolver(name, null, { resolveName, checkCreator }))?.toLowerCase();
+  const error = !value || (value && value === name);
+
+  if (error) {
+    return ctx.json({ error: { message: `Cannot resolve ${name} address` } }, { status: 404 });
+  }
+
+  const result = resolveName ? { name: value, address: name } : { name, address: value };
+  return ctx.json({ result }, { headers: getHeaders(3600) });
 }
 
 export async function listAllEthscriptionsHandler(ctx: Context) {
@@ -485,7 +482,7 @@ export async function initialNormalize(ctx, alternativeUrl?: URL) {
   return { result, pagination, ifNoneMatch, withContentUri, url, id };
 }
 
-export async function onchainEnsHandler(
+export async function ensBasicOnchainHandler(
   val: string,
   options: {
     checkCreator: string | undefined;
@@ -493,15 +490,32 @@ export async function onchainEnsHandler(
   },
 ) {
   const opts = { ...options };
+
+  // never throws, returns the passed value if ENS name not found
   return opts.publicClient.getEnsAddress({
     name: normalizeEns(val),
   });
+}
+
+async function ensApiHandler(val: string | `0x${string}`, options = {}) {
+  // if `val` is address, resolve to ens name
+  const opts = { resolveName: val && val.startsWith('0x') && val.length === 42, ...options };
+  const resp = await fetch(`https://api.ensdata.net/${val}`);
+
+  if (!resp.ok) {
+    return null;
+  }
+
+  const data = (await resp.json()) as any;
+
+  return opts.resolveName ? data.ens : data.address;
 }
 
 export async function nameResolver(
   value: string,
   ensHandler?: any,
   options?: {
+    resolveName?: boolean;
     checkCreator?: string | undefined;
     publicClient?: PublicClient;
   },
@@ -510,16 +524,28 @@ export async function nameResolver(
   const val = value.toLowerCase();
   const handler = ensHandler || DEFAULT_ENS_HANDLER;
 
-  if (/\.(com|lol|xyz|bg|info|net|id|org|eth$)/.test(val)) {
-    try {
-      const address = await handler(val, opts);
+  // if (handler.name === 'onchainEnsHandler' && /\.(com|lol|xyz|bg|info|net|id|org|eth$)/.test(val)) {
+  //   try {
+  //     const address = await handler(val, opts);
 
-      if (address) {
-        return address;
-      }
-    } catch {
-      console.log('ENS resolution failed, continuing...');
-    }
+  //     if (address) {
+  //       return address;
+  //     }
+  //   } catch {
+  //     console.log('ENS resolution failed, continuing...');
+  //   }
+  // }
+  //
+  const result = await handler(val, opts);
+
+  // if the name is found in the ENS registry, return it
+  if (result) {
+    return result;
+  }
+
+  // if it's an address, there's no sense trying resolving it as ethscription name
+  if (isAddress(val)) {
+    return null;
   }
 
   const nameUri = `data:,${val}`;
@@ -537,23 +563,26 @@ export async function nameResolver(
   return val;
 }
 
+export function isAddress(val: string) {
+  return Boolean(val && val.startsWith('0x') && val.length === 42);
+}
+
 export async function resolveAddressPatches(url) {
   const addressParams = [...url.searchParams.entries()].filter(
-    ([key, value]) =>
-      /creator|receiver|owner/.test(key) && value.length > 0 && !value.startsWith('0x'),
+    ([key, value]) => /creator|receiver|owner/.test(key) && value.length > 0 && !isAddress(value),
   );
 
-  const publicClient = createPublicClient({
-    chain: mainnet,
-    transport: http(),
-  });
+  // const publicClient = createPublicClient({
+  //   chain: mainnet,
+  //   transport: http(),
+  // });
 
   const params = await Promise.all(
     addressParams.map(async ([key, value]) => {
       // if it cannit resolve neither ENS, nor Ethscriptions Name, it passthrough the `value`
-      const val = await nameResolver(value, DEFAULT_ENS_HANDLER, { publicClient });
+      const val = await nameResolver(value, null, { resolveName: false } /* { publicClient } */);
 
-      return [key, val];
+      return [key, val || value];
     }),
   );
 
