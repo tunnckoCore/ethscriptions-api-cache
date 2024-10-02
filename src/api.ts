@@ -167,7 +167,7 @@ export async function checkExistHandler(ctx: Context, _sha?: string) {
   if (resp.result.exists) {
     const eth = resp.result.ethscription;
     return ctx.json(
-      { result: { exists: true, ethscription: normalizeResult(eth) } },
+      { result: { exists: true, ethscription: normalizeResult(eth, ctx.req.url) } },
       { headers: getHeaders(CACHE_TTL) },
     );
   }
@@ -255,13 +255,13 @@ async function profileHandler(ctx: Context) {
   console.log({ url });
 
   const config = (await initialNormalize(ctx, url)) as any;
-  const { error, result, pagination, withContentUri } = config;
+  const { error, result, pagination } = config;
 
   if (error) {
     return ctx.json({ error }, { status: error.httpStatus });
   }
 
-  const data = result.map((x) => normalizeResult(x, withContentUri));
+  const data = result.map((x) => normalizeResult(x, url));
 
   if (endpoint === 'info') {
     return ctx.json(
@@ -307,13 +307,13 @@ async function resolveHandler(ctx: Context) {
 
 export async function listAllEthscriptionsHandler(ctx: Context) {
   const config = (await initialNormalize(ctx)) as any;
-  const { error, result, pagination, ifNoneMatch, withContentUri } = config;
+  const { error, result, pagination } = config;
 
   if (error) {
     return ctx.json({ error }, { status: error.httpStatus });
   }
 
-  const data = result.map((x) => normalizeResult(x, withContentUri));
+  const data = result.map((x) => normalizeResult(x, ctx.req.url));
 
   console.log('[all] fresh miss');
   const response = ctx.json({ result: data, pagination }, { headers: getHeaders(15) });
@@ -325,14 +325,14 @@ app.get('/ethscriptions', listAllEthscriptionsHandler);
 
 async function ethscriptionByIdHandler(ctx: Context) {
   const config = (await initialNormalize(ctx)) as any;
-  const { error, result, withContentUri, ifNoneMatch } = config;
+  const { error, result } = config;
 
   if (error) {
     return ctx.json({ error }, { status: error.httpStatus });
   }
 
   console.log('[id] fresh miss');
-  const data = normalizeResult(result, withContentUri);
+  const data = normalizeResult(result, ctx.req.url);
 
   const response = ctx.json({ result: data }, { headers: getHeaders(CACHE_TTL) });
 
@@ -343,13 +343,13 @@ app.get('/ethscriptions/:id', ethscriptionByIdHandler);
 
 async function ethscriptionSubHandler(ctx: Context) {
   const type = ctx.req.param('type');
-  const { error, result, withContentUri, ifNoneMatch, url } = (await initialNormalize(ctx)) as any;
+  const { error, result, url } = (await initialNormalize(ctx)) as any;
 
   if (error) {
     return ctx.json({ error }, { status: error.httpStatus });
   }
 
-  const data = normalizeResult(result, withContentUri);
+  const data = normalizeResult(result, ctx.req.url);
 
   let response;
   if (type && /meta/.test(type)) {
@@ -456,8 +456,10 @@ export async function initialNormalize(ctx, alternativeUrl?: URL) {
   const id = ctx.req.param('id');
   const withContentUri = Boolean(url.searchParams.get('with_content_uri'));
   const ifNoneMatch = ctx.req.header('If-None-Match') ?? null;
+  //  with=current_owner&only=transaction_hash,current_owner&max_results=1000
 
   await searchParamPatches(url);
+
   if (url.searchParams.get('with_resolve')) {
     await resolveAddressPatches(url);
     url.searchParams.delete('with_resolve');
@@ -617,6 +619,10 @@ export function searchParamPatches(url) {
     url.searchParams.set('current_owner', url.searchParams.get('current') || '');
     url.searchParams.delete('current');
   }
+  if (url.searchParams.get('owner')) {
+    url.searchParams.set('current_owner', url.searchParams.get('owner') || '');
+    url.searchParams.delete('owner');
+  }
 
   // content_type is equal to `<media_type>/<media_subtype>`, it's called "mimetype" in upstream
   if (url.searchParams.get('content_type')) {
@@ -630,6 +636,17 @@ export function searchParamPatches(url) {
     url.searchParams.set('esip6', url.searchParams.get('is_esip6'));
     url.searchParams.delete('is_esip6');
   }
+
+  // const withs = url.searchParams.get('with')?.split(',') || [];
+  // const onlys = url.searchParams.get('only')?.split(',') || [];
+  // const ogParam = url.searchParams.get('transaction_hash_only');
+
+  // const isTxOnly =
+  //   withs.includes('transaction_hash') || onlys.includes('transaction_hash') || ogParam;
+
+  // if (isTxOnly) {
+  //   url.searchParams.set('transaction_hash_only', 'true');
+  // }
 
   return url;
 }
@@ -654,8 +671,32 @@ export function getHeaders(time = 31_536_000, additionalHeaders = {}, cfType = '
   // };
 }
 
-export function normalizeResult(result, withContent = false) {
-  return {
+export function normalizeResult(result, withUrl?: any) {
+  const keys = Object.keys(result || {});
+  const url = withUrl ? new URL(withUrl) : new URL('http://foo.com');
+
+  const withs = url.searchParams.get('with')?.split(',') || [];
+  const onlys = url.searchParams.get('only')?.split(',') || [];
+  const isTxOnly =
+    (keys.length === 1 && keys[0] === 'transaction_hash') ||
+    url.searchParams.get('transaction_hash_only');
+
+  if (isTxOnly) {
+    console.log({ isTxOnly });
+    return result;
+  }
+  // const txonly = Boolean(
+  //   (keys.length === 1 && keys[0] === 'transaction_hash') ||
+  //     url.searchParams.get('transaction_hash_only') ||
+  //     false,
+  // );
+
+  // // // if `transaction_hash_only` param is used
+  // if (txonly) {
+  //   return result;
+  // }
+
+  const res = {
     block_number: String(result.block_number),
     block_blockhash: result.block_blockhash,
     block_timestamp: String(result.block_timestamp),
@@ -673,7 +714,8 @@ export function normalizeResult(result, withContent = false) {
     content_type: result.mimetype,
     content_sha: result.content_sha,
     content_path: `/ethscriptions/${result.transaction_hash}/content`,
-    ...(withContent ? { content_uri: result.content_uri } : {}),
+    // Note use `with=content_uri`
+    // ...(withContent ? { content_uri: result.content_uri } : {}),
     ...(result.attachment_sha
       ? {
           attachment_content_type: result.attachment_content_type,
@@ -688,6 +730,25 @@ export function normalizeResult(result, withContent = false) {
     is_esip6: result.esip6,
     is_esip8: Boolean(result.attachment_sha),
   };
+
+  const onlyRes = Object.fromEntries(
+    Object.entries(res).filter(([key, _val]) => {
+      if (onlys.length > 0) {
+        return onlys.includes(key);
+      }
+      return true;
+    }),
+  );
+
+  const withRes = withs.reduce((acc, withKey) => {
+    if (!acc[withKey]) {
+      acc[withKey] = res[withKey] || result[withKey];
+    }
+
+    return acc;
+  }, onlyRes);
+
+  return withRes.length > 0 ? withRes : onlyRes;
 }
 
 export async function createDigest(msg, algo: 'SHA-1' | 'SHA-256' | 'SHA-512' = 'SHA-256') {
