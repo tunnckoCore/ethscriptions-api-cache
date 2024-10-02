@@ -67,18 +67,22 @@ export const ENDPOINTS = [
   '/ethscriptions - feed of all ethscriptions, including blobscriptions, supports filters',
   '/ethscriptions?filter=params - all filters from the official API are supported, also can use ENS or Eths Names',
   '',
+  'Can use comma-separated fields to include specific fields from the upstream API, like `content_uri`',
+  '/ethscriptions?with=current_owner,content_uri - `current_owner` is not existent in regular response, so it comes from upstream',
+  '/ethscriptions?only=transaction_hash,creator,content_uri - results in response to include only these fields',
+  '',
   'Filters examples, for user created and owned, better use the /profiles/:name endpoints',
   '',
   '/ethscriptions?creator=0xAddress - filter by creator address',
-  "/ethscriptions?creator=wgw - since there is no `with_resolve` param, it won't find wgw's ethscriptions",
-  '/ethscriptions?creator=wgw&with_resolve=1 - filter by creator, using current owner of this Ethscription Name',
-  '/ethscriptions?creator=ckwf.cb.id&with_resolve=1 - filter by creator using Coinbase Off-chain ENS',
-  '/ethscriptions?creator=dubie.eth&with_resolve=1 - filter by creator using On-Chain ENS',
-  '/ethscriptions?initial_owner=wgw.lol&with_resolve=1 - filter by initial owner, using current owner of an Ethscription name',
-  '/ethscriptions?initial_owner=5848.tree&with_resolve=1 - filter by initial owner, using current owner of this Ethscription Name',
-  '/ethscriptions?creator=123.ethmap&with_resolve=1 - filter by creator, current holder/owner of this Ethscription',
-  '/ethscriptions?current_owner=barry.wgw.lol&with_resolve=1 - filter by current owner of this off-chain ENS name',
-  '/ethscriptions?current_owner=e5b5&with_resolve=1 - filter by creator, using current owner of this Ethscription Name',
+  "/ethscriptions?creator=wgw - since there is no `resolve` param, it won't find wgw's ethscriptions",
+  '/ethscriptions?creator=wgw&resolve=1 - filter by creator, using current owner of this Ethscription Name',
+  '/ethscriptions?creator=ckwf.cb.id&resolve=1 - filter by creator using Coinbase Off-chain ENS',
+  '/ethscriptions?creator=dubie.eth&resolve=1 - filter by creator using On-Chain ENS',
+  '/ethscriptions?initial_owner=wgw.lol&resolve=1 - filter by initial owner, using current owner of an Ethscription name',
+  '/ethscriptions?initial_owner=5848.tree&resolve=1 - filter by initial owner, using current owner of this Ethscription Name',
+  '/ethscriptions?creator=123.ethmap&resolve=1 - filter by creator, current holder/owner of this Ethscription',
+  '/ethscriptions?current_owner=barry.wgw.lol&resolve=1 - filter by current owner of this off-chain ENS name',
+  '/ethscriptions?owner=e5b5&resolve=1 - filter by current owner',
   '',
   'Blobscriptions',
   '',
@@ -95,7 +99,7 @@ export const ENDPOINTS = [
   '',
   '/ethscriptions/:id/metadata - alias of /ethscriptions/:id',
   '/ethscriptions/:id/meta - alias of above',
-  '/ethscriptions/:id/meta?with_content_uri=true - include the content_uri in the response',
+  '/ethscriptions/:id/meta?with=content_uri - include the content_uri in the response',
   '',
   '/ethscriptions/:id/attachment',
   '/ethscriptions/:id/blob - alias of above',
@@ -241,7 +245,7 @@ async function profileHandler(ctx: Context) {
 
   console.log({ name, endpoint });
 
-  url.searchParams.set('with_resolve', 'true');
+  url.searchParams.set('resolve', 'true');
 
   if (endpoint === 'created') {
     url.searchParams.set('creator', name);
