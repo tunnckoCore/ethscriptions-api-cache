@@ -462,9 +462,9 @@ export async function initialNormalize(ctx, alternativeUrl?: URL) {
 
   await searchParamPatches(url);
 
-  if (url.searchParams.get('with_resolve')) {
+  if (url.searchParams.get('resolve')) {
     await resolveAddressPatches(url);
-    url.searchParams.delete('with_resolve');
+    url.searchParams.delete('resolve');
   }
 
   const resp = await fetch(`${BASE_API_URL}/ethscriptions${id ? `/${id}` : ''}${url.search}`);
