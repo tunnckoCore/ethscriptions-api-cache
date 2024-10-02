@@ -8,9 +8,10 @@ import { cors as corsMiddleware } from 'hono/cors';
 import { etag as etagMiddleware } from 'hono/etag';
 import { secureHeaders } from 'hono/secure-headers';
 import { trimTrailingSlash } from 'hono/trailing-slash';
-import { bytesToHex, createPublicClient, hexToBytes, http, type PublicClient } from 'viem';
-import { mainnet } from 'viem/chains';
-import { normalize as normalizeEns } from 'viem/ens';
+
+// import { bytesToHex, createPublicClient, hexToBytes, http, type PublicClient } from 'viem';
+// import { mainnet } from 'viem/chains';
+// import { normalize as normalizeEns } from 'viem/ens';
 
 type Bindings = {
   COMMIT_SHA: string;
@@ -488,14 +489,15 @@ export async function ensBasicOnchainHandler(
   val: string,
   options: {
     checkCreator: string | undefined;
-    publicClient: PublicClient;
+    publicClient: any;
+    normalizeEns: any;
   },
 ) {
   const opts = { ...options };
 
   // never throws, returns the passed value if ENS name not found
   return opts.publicClient.getEnsAddress({
-    name: normalizeEns(val),
+    name: opts.normalizeEns(val),
   });
 }
 
@@ -519,7 +521,7 @@ export async function nameResolver(
   options?: {
     resolveName?: boolean;
     checkCreator?: string | undefined;
-    publicClient?: PublicClient;
+    publicClient?: any;
   },
 ) {
   const opts = { ...options };

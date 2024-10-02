@@ -39,8 +39,7 @@
   },
   "dependencies": {
     "cdn-cache-control": "^1.1.0",
-    "hono": "^4.6.3",
-    "viem": "^2.21.15"
+    "hono": "^4.6.3"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240925.0",
