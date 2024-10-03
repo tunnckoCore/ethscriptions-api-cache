@@ -203,8 +203,9 @@ async function estimateHandler(ctx: Context, data: string, settings) {
   return ctx.json({ result: res });
 }
 
-export async function estimateDataCost(data: string, settings = {}) {
-  const { error: err, result: prices } = await getPrices(settings.type);
+export async function estimateDataCost(data: string, settings?: any) {
+  const options = { type: 'normal', ...settings };
+  const { error: err, result: prices } = await getPrices(options.type);
 
   if (err) {
     return { error: err };
@@ -215,7 +216,7 @@ export async function estimateDataCost(data: string, settings = {}) {
     useGasFee: 0,
     bufferFee: 0,
     ethPrice: prices.ethPrice,
-    ...settings,
+    ...options,
   };
   const { error, result } = estimateDataCostInWei(
     data,
@@ -241,34 +242,48 @@ export async function estimateDataCost(data: string, settings = {}) {
 }
 
 // eslint-disable-next-line max-params
-export function estimateDataCostInWei(data: string, baseFee, priorityFee, bufferFee = 0) {
-  if (!data || (data && typeof data !== 'string')) {
-    return { error: { message: 'Invalid data, must be a string', httpStatus: 400 } };
+export function estimateDataCostInWei(
+  data: string | `0x${string}` | Uint8Array,
+  baseFee,
+  priorityFee,
+  bufferFee = 0,
+) {
+  if (!data) {
+    return { error: { message: 'Invalid data, must be a string or Uint8Array', httpStatus: 400 } };
   }
 
   try {
-    const isRawData = data.startsWith('data:');
-    const isHexData = data.startsWith('0x646174613a');
+    const isStrData = typeof data === 'string';
+    const dataStr = isStrData ? data : '';
 
-    const dataBytes = isRawData
-      ? new TextEncoder().encode(data)
-      : isHexData
-        ? Uint8Array.from(
-            data
-              .slice(2)
-              .match(/.{1,2}/g)
-              ?.map((e) => Number.parseInt(e, 16)) || [],
-          )
-        : new TextEncoder().encode(atob(data));
+    if (isStrData && dataStr.length === 0) {
+      throw new Error('Invalid data, must be a string non empty string');
+    }
+
+    const isRawData = dataStr.startsWith('data:');
+    const isHexData = dataStr.startsWith('0x646174613a');
+
+    const input = isStrData
+      ? isRawData
+        ? new TextEncoder().encode(dataStr)
+        : isHexData
+          ? Uint8Array.from(
+              dataStr
+                .slice(2)
+                .match(/.{1,2}/g)
+                ?.map((e) => Number.parseInt(e, 16)) || [],
+            )
+          : new TextEncoder().encode(atob(dataStr))
+      : data;
 
     // const gasWei = oracle.normal.gwei * 1e9;
-    const dataWei = dataBytes.reduce((acc, byte) => acc + (byte === 0 ? 4 : 16), 0);
+    const dataWei = input.reduce((acc, byte) => acc + (byte === 0 ? 4 : 16), 0);
     const transferWei = 21_000;
     const bufferWei = bufferFee; // without this extra buffer, it's  not even close, around $0.50+ off
     const usedWei = dataWei + transferWei + bufferWei;
     const costWei = usedWei * (baseFee + priorityFee);
 
-    return { result: { wei: costWei, meta: { gasUsed: usedWei, dataLength: dataBytes.length } } };
+    return { result: { wei: costWei, meta: { gasUsed: usedWei, inputLength: input.length } } };
   } catch (err: any) {
     return { error: { message: `Failure in estimate: ${err.toString()}`, httpStatus: 500 } };
   }
