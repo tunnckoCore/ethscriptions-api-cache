@@ -9,10 +9,6 @@ import { etag as etagMiddleware } from 'hono/etag';
 import { secureHeaders } from 'hono/secure-headers';
 import { trimTrailingSlash } from 'hono/trailing-slash';
 
-// import { bytesToHex, createPublicClient, hexToBytes, http, type PublicClient } from 'viem';
-// import { mainnet } from 'viem/chains';
-// import { normalize as normalizeEns } from 'viem/ens';
-
 type Bindings = {
   COMMIT_SHA: string;
 };
@@ -29,6 +25,11 @@ export const ENDPOINTS = [
   '',
   '/exists/:sha - 0x-prefixed or non-prefixed SHA-256 hex string',
   '/check/:sha - alias of above',
+  '',
+  'Estimating gas costs',
+  '',
+  'POST /estimate - estimate the cost of creating an Ethscription, pass `data` field in JSON body',
+  'GET /estimate/:dataURI - could be a dataURI, or 0x-prefixed hex dataURI, or base64-ed dataURI',
   '',
   'A generation of SHA-256 and resolving of Ethscriptions',
   '',
@@ -125,19 +126,6 @@ app.use(etagMiddleware({ weak: true }));
 app.use(corsMiddleware({ origin: '*' }));
 app.use(secureHeaders());
 
-// const permaCache = perUserPermaCacheMiddleware({
-//   cacheName: 'eths',
-//   cacheControl: `public,max-age=${ONE_YEAR},immutable`,
-// });
-
-// these always respond with the same, we can perma cache them safely
-// app.get('/ethscriptions/:id/content', permaCache);
-// app.get('/ethscriptions/:id/metadata', permaCache);
-// app.get('/ethscriptions/:id/data', permaCache); // alias of /content
-// app.get('/ethscriptions/:id/meta', permaCache); // alias of /metadata
-// app.get('/ethscriptions/:id/number', permaCache); // ethscription_number and other static numbers
-// app.get('/ethscriptions/:id/index', permaCache); // alias of /number
-
 app.get('/', async (ctx) => {
   const commitsha = ctx.env.COMMIT_SHA;
 
@@ -147,6 +135,140 @@ app.get('/', async (ctx) => {
     endpoints: ENDPOINTS,
   });
 });
+
+export async function getPrices(type = 'normal') {
+  try {
+    const resp = await fetch(`https://www.ethgastracker.com/api/gas/latest`);
+
+    if (!resp.ok) {
+      return {
+        error: {
+          message: `Failed to fetch gas prices: ${resp.statusText}`,
+          httpStatus: resp.status || 500,
+        },
+      };
+    }
+
+    const { data }: any = await resp.json();
+    return {
+      result: {
+        baseFee: data.baseFee,
+        nextFee: data.nextFee,
+        ethPrice: data.ethPrice,
+        gasPrice: data.oracle[type].gwei,
+        gasFee: data.oracle[type].gasFee,
+        priorityFee: data.oracle[type].priorityFee,
+      },
+    };
+  } catch (e: any) {
+    return {
+      error: { message: `Failed to fetch prices from API: ${e.toString()}`, httpStatus: 500 },
+    };
+  }
+}
+
+// the `:data` can be 0x-prefixed hex, base64-ed, or plain dataURI
+app.get('/estimate/:data', async (c) => {
+  const data = c.req.param('data');
+  const url = new URL(c.req.url);
+
+  const query = Object.fromEntries(
+    [...url.searchParams.entries()].map(([key, value]) => {
+      const val = Number(value);
+
+      return [key, Number.isNaN(val) ? value : val || 0];
+    }),
+  );
+  console.log({ query });
+  return estimateHandler(c, data, query);
+});
+
+app.post('/estimate', async (c: Context) => {
+  const { data, ...settings } = await c.req.json();
+
+  return estimateHandler(c, data, settings);
+});
+
+async function estimateHandler(ctx: Context, data: string, settings) {
+  const { error, result: res } = await estimateDataCost(data, settings);
+
+  if (error) {
+    return ctx.json({ error }, { status: error.httpStatus });
+  }
+
+  return ctx.json({ result: res });
+}
+
+export async function estimateDataCost(data: string, settings = {}) {
+  const { error: err, result: prices } = await getPrices(settings.type);
+
+  if (err) {
+    return { error: err };
+  }
+
+  const opts = {
+    baseFee: prices.nextFee,
+    useGasFee: 0,
+    bufferFee: 0,
+    ethPrice: prices.ethPrice,
+    ...settings,
+  };
+  const { error, result } = estimateDataCostInWei(
+    data,
+    opts.baseFee,
+    opts.useGasFee ? prices.gasFee : prices.priorityFee,
+    opts.bufferFee,
+  );
+
+  if (error) {
+    return { error };
+  }
+
+  const eth = result.wei / 1e18;
+  const usd = eth * opts.ethPrice;
+
+  return {
+    result: {
+      prices,
+      cost: { wei: result.wei, eth, usd },
+      meta: result.meta,
+    },
+  };
+}
+
+// eslint-disable-next-line max-params
+export function estimateDataCostInWei(data: string, baseFee, priorityFee, bufferFee = 0) {
+  if (!data || (data && typeof data !== 'string')) {
+    return { error: { message: 'Invalid data, must be a string', httpStatus: 400 } };
+  }
+
+  try {
+    const isRawData = data.startsWith('data:');
+    const isHexData = data.startsWith('0x646174613a');
+
+    const dataBytes = isRawData
+      ? new TextEncoder().encode(data)
+      : isHexData
+        ? Uint8Array.from(
+            data
+              .slice(2)
+              .match(/.{1,2}/g)
+              ?.map((e) => Number.parseInt(e, 16)) || [],
+          )
+        : new TextEncoder().encode(atob(data));
+
+    // const gasWei = oracle.normal.gwei * 1e9;
+    const dataWei = dataBytes.reduce((acc, byte) => acc + (byte === 0 ? 4 : 16), 0);
+    const transferWei = 21_000;
+    const bufferWei = bufferFee; // without this extra buffer, it's  not even close, around $0.50+ off
+    const usedWei = dataWei + transferWei + bufferWei;
+    const costWei = usedWei * (baseFee + priorityFee);
+
+    return { result: { wei: costWei, meta: { gasUsed: usedWei, dataLength: dataBytes.length } } };
+  } catch (err: any) {
+    return { error: { message: `Failure in estimate: ${err.toString()}`, httpStatus: 500 } };
+  }
+}
 
 app.get('/check/:sha', (ctx) => checkExistHandler(ctx));
 app.get('/exists/:sha', (ctx) => checkExistHandler(ctx));
