@@ -267,12 +267,7 @@ export function estimateDataCostInWei(
       ? isRawData
         ? new TextEncoder().encode(dataStr)
         : isHexData
-          ? Uint8Array.from(
-              dataStr
-                .slice(2)
-                .match(/.{1,2}/g)
-                ?.map((e) => Number.parseInt(e, 16)) || [],
-            )
+          ? hex2bytes(dataStr)
           : new TextEncoder().encode(atob(dataStr))
       : data;
 
@@ -367,8 +362,12 @@ export async function getSha256ForData(ctx: Context) {
 
   const checkResp = await checkExistHandler(ctx, sha);
   const { result } = (await checkResp.json()) as any;
+  const hexed = bytes2hex(new TextEncoder().encode(data));
 
-  return ctx.json({ result: { sha, ...result } }, { headers: getHeaders(CACHE_TTL) });
+  return ctx.json(
+    { result: { sha, hex: `0x${hexed}`, input: data, ...result } },
+    { headers: getHeaders(CACHE_TTL) },
+  );
 }
 
 app.get('/sha/:data?', getSha256ForData);
@@ -919,3 +918,12 @@ export function numfmt(x, delim = ',') {
 }
 
 export const getApp = () => app;
+
+/** @param {string} str */
+export function hex2bytes(str) {
+  return new Uint8Array([...str.matchAll(/../g)].map((m) => Number.parseInt(m[0], 16)));
+}
+/** @param {Uint8Array} bytes */
+export function bytes2hex(bytes) {
+  return [...bytes].map((n) => n.toString(16)).join('');
+}
