@@ -164,9 +164,9 @@ export async function getPrices(type = 'normal') {
         priorityFee: data.oracle[type].priorityFee,
       },
     };
-  } catch (e: any) {
+  } catch (err: any) {
     return {
-      error: { message: `Failed to fetch prices from API: ${e.toString()}`, httpStatus: 500 },
+      error: { message: `Failed to fetch prices from API: ${err.toString()}`, httpStatus: 500 },
     };
   }
 }
