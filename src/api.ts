@@ -317,6 +317,7 @@ export async function checkExistHandler(ctx: Context, _sha?: string) {
   return ctx.json({ result: { exists: false } });
 }
 
+app.get('/sha/:data?', getSha256ForData);
 // generate SHA-256 of a given base64-ed (or not, eg. raw "data:,wgw") data URI string.
 // If the data exists it also resolves the ethscription metadata for that SHA.
 // /sha?of=<base64_or_raw>
@@ -325,16 +326,11 @@ export async function checkExistHandler(ctx: Context, _sha?: string) {
 // /sha?of=ZGF0YTosNTg0OC5ldGhtYXA= => (data:,5848.ethmap) exists
 // /sha/ZGF0YTosZm9vYmFyYmF6 => (data:,foobarbaz) not exists
 export async function getSha256ForData(ctx: Context) {
-  let dataB64 = ctx.req.param('data');
-  let data;
+  const dataParam = ctx.req.param('data');
+  const dataQuery = ctx.req.query('of') || ctx.req.query('data');
 
-  // if not in params, check query param `of=<base64_or_raw>`
-  if (!dataB64) {
-    dataB64 = ctx.req.query('of') || '';
-  }
-
-  // if neither in params nor query, return error
-  if (!dataB64) {
+  const input = dataParam || dataQuery;
+  if (!input) {
     return ctx.json(
       {
         error: {
@@ -346,31 +342,54 @@ export async function getSha256ForData(ctx: Context) {
     );
   }
 
-  // try to decode input as base64
+  const isRawData = input.startsWith('data:');
+  const isHexData = input.startsWith('0x646174613a');
+  const isB64Data = !isRawData && !isHexData;
+
+  if (!isRawData && !isHexData && !isB64Data) {
+    return ctx.json(
+      {
+        error: {
+          message: 'Invalid data, must be a data URI, or base64 or hex encoded dataURI string',
+          httpStatus: 400,
+        },
+      },
+      { status: 400 },
+    );
+  }
+
   try {
-    data = atob(dataB64);
-  } catch {
-    // if it fails, it's not base64
+    const data = isRawData
+      ? new TextEncoder().encode(input)
+      : isHexData
+        ? hex2bytes(input.slice(2))
+        : isB64Data
+          ? new TextEncoder().encode(atob(input))
+          : input;
+
+    const sha = await createDigest(data);
+
+    const checkResp = await checkExistHandler(ctx, sha);
+    const { result } = (await checkResp.json()) as any;
+    const hexed = bytes2hex(data);
+    const inputData = new TextDecoder('utf8').decode(data as Uint8Array);
+
+    return ctx.json(
+      { result: { sha, hex: `0x${hexed}`, input: inputData, ...result } },
+      { headers: getHeaders(CACHE_TTL) },
+    );
+  } catch (err: any) {
+    return ctx.json(
+      {
+        error: {
+          message: `Failure in SHA generation: ${err.toString()}`,
+          httpStatus: 400,
+        },
+      },
+      { status: 400 },
+    );
   }
-
-  // if not base64, consider it as raw data
-  if (!data) {
-    data = dataB64;
-  }
-
-  const sha = await createDigest(data);
-
-  const checkResp = await checkExistHandler(ctx, sha);
-  const { result } = (await checkResp.json()) as any;
-  const hexed = bytes2hex(new TextEncoder().encode(data));
-
-  return ctx.json(
-    { result: { sha, hex: `0x${hexed}`, input: data, ...result } },
-    { headers: getHeaders(CACHE_TTL) },
-  );
 }
-
-app.get('/sha/:data?', getSha256ForData);
 
 app.get('/profiles/:name/created', profileHandler);
 app.get('/profiles/:name/own', profileHandler);
@@ -898,8 +917,11 @@ export function normalizeResult(result, withUrl?: any) {
   return withRes.length > 0 ? withRes : onlyRes;
 }
 
-export async function createDigest(msg, algo: 'SHA-1' | 'SHA-256' | 'SHA-512' = 'SHA-256') {
-  const data = new TextEncoder().encode(msg);
+export async function createDigest(
+  msg: string | Uint8Array,
+  algo: 'SHA-1' | 'SHA-256' | 'SHA-512' = 'SHA-256',
+) {
+  const data = typeof msg === 'string' ? new TextEncoder().encode(msg) : msg;
   const hashBuffer = await crypto.subtle.digest(algo, data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
