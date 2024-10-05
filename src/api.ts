@@ -42,7 +42,9 @@ export const ENDPOINTS = [
   'GET /estimate/0x646174613a3b72756c653d65736970362c666f6f20626172 - estimate cost of "data:,rule=esip6,foo bar"',
   'GET /estimate/data:,wgw - for simple things',
   'GET /estimeate/ZGF0YTosaGVsbG8gd29ybGQ= - a base64 of "data:,hello world"',
-  'GET /estimate/data:,foobie?type=fast&ethPrice=4000 - use "fast" instead of normal gas price, and custom ETH price',
+  'GET /estimate/data:,foobie?speed=fast&ethPrice=4000 - use "fast" instead of normal gas price, and custom ETH price',
+  'GET /estimate/data:,foobie?gasPrice=10 - gas price in gwei instead of current prices',
+  'GET /estimate/data:,foobie?baseFee=3217313071&priorityFee=1721711208 - use fees in wei, custom base (3.217 gwei) and priority fees (1.721 gwei)',
   '',
   'A generation of SHA-256 and resolving of Ethscriptions',
   '',
@@ -185,7 +187,7 @@ app.get('/', async (ctx) => {
 //   return handlers(ctx.req.raw);
 // }
 
-export async function getPrices(type = 'normal') {
+export async function getPrices(speed = 'normal') {
   try {
     const resp = await fetch(`https://www.ethgastracker.com/api/gas/latest`);
 
@@ -204,9 +206,9 @@ export async function getPrices(type = 'normal') {
         baseFee: data.baseFee,
         nextFee: data.nextFee,
         ethPrice: data.ethPrice,
-        gasPrice: data.oracle[type].gwei,
-        gasFee: data.oracle[type].gasFee,
-        priorityFee: data.oracle[type].priorityFee,
+        gasPrice: data.oracle[speed].gwei,
+        gasFee: data.oracle[speed].gasFee,
+        priorityFee: data.oracle[speed].priorityFee,
       },
     };
   } catch (err: any) {
@@ -221,15 +223,15 @@ app.get('/estimate/:data', async (c) => {
   const data = c.req.param('data');
   const url = new URL(c.req.url);
 
-  const query = Object.fromEntries(
+  const searchParams = Object.fromEntries(
     [...url.searchParams.entries()].map(([key, value]) => {
       const val = Number(value);
 
       return [key, Number.isNaN(val) ? value : val || 0];
     }),
   );
-  console.log({ query });
-  return estimateHandler(c, data, query);
+
+  return estimateHandler(c, data, searchParams);
 });
 
 app.post('/estimate', async (c: Context) => {
@@ -238,7 +240,7 @@ app.post('/estimate', async (c: Context) => {
   return estimateHandler(c, data, settings);
 });
 
-export async function estimateHandler(ctx: Context, data: string, settings) {
+export async function estimateHandler(ctx: Context, data: string, settings: any) {
   const { error, result: res } = await estimateDataCost(data, settings);
 
   if (error) {
@@ -249,8 +251,8 @@ export async function estimateHandler(ctx: Context, data: string, settings) {
 }
 
 export async function estimateDataCost(data: string, settings?: any) {
-  const options = { type: 'normal', ...settings };
-  const { error: err, result: prices } = await getPrices(options.type);
+  const options = { speed: 'normal', ...settings };
+  const { error: err, result: prices } = await getPrices(options.speed);
 
   if (err) {
     return { error: err };
@@ -258,17 +260,12 @@ export async function estimateDataCost(data: string, settings?: any) {
 
   const opts = {
     baseFee: prices.nextFee,
-    useGasFee: 0,
+    priorityFee: prices.priorityFee,
     bufferFee: 0,
     ethPrice: prices.ethPrice,
     ...options,
   };
-  const { error, result } = estimateDataCostInWei(
-    data,
-    opts.baseFee,
-    opts.useGasFee ? prices.gasFee : prices.priorityFee,
-    opts.bufferFee,
-  );
+  const { error, result } = estimateDataCostInWei(data, opts);
 
   if (error) {
     return { error };
@@ -287,12 +284,8 @@ export async function estimateDataCost(data: string, settings?: any) {
 }
 
 // eslint-disable-next-line max-params
-export function estimateDataCostInWei(
-  data: string | `0x${string}` | Uint8Array,
-  baseFee,
-  priorityFee,
-  bufferFee = 0,
-) {
+export function estimateDataCostInWei(data: string | `0x${string}` | Uint8Array, settings: any) {
+  const opts = { ...settings };
   if (!data) {
     return { error: { message: 'Invalid data, must be a string or Uint8Array', httpStatus: 400 } };
   }
@@ -316,12 +309,12 @@ export function estimateDataCostInWei(
           : new TextEncoder().encode(atob(dataStr))
       : data;
 
-    // const gasWei = oracle.normal.gwei * 1e9;
     const dataWei = input.reduce((acc, byte) => acc + (byte === 0 ? 4 : 16), 0);
     const transferWei = 21_000;
-    const bufferWei = bufferFee; // without this extra buffer, it's  not even close, around $0.50+ off
+    const bufferWei = opts.bufferFee;
     const usedWei = dataWei + transferWei + bufferWei;
-    const costWei = usedWei * (baseFee + priorityFee);
+    const totalGasWei = opts.gasPrice ? opts.gasPrice * 1e9 : opts.baseFee + opts.priorityFee;
+    const costWei = usedWei * totalGasWei;
 
     return { result: { wei: costWei, meta: { gasUsed: usedWei, inputLength: input.length } } };
   } catch (err: any) {
