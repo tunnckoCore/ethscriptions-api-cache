@@ -4,16 +4,25 @@
 
 import { CacheHeaders } from 'cdn-cache-control';
 import { Hono, type Context } from 'hono';
+import { env as envAdapter } from 'hono/adapter';
 import { cors as corsMiddleware } from 'hono/cors';
 import { etag as etagMiddleware } from 'hono/etag';
 import { secureHeaders } from 'hono/secure-headers';
 import { trimTrailingSlash } from 'hono/trailing-slash';
+import { createRouteHandler } from 'uploadthing/server';
+
+import { uploadRouter } from './uploadthing.ts';
 
 type Bindings = {
   COMMIT_SHA: string;
 };
 
-export const app = new Hono<{ Bindings: Bindings }>();
+type Env = {
+  ENVIRONMENT: 'production' | 'development';
+  UPLOADTHING_TOKEN: string;
+};
+
+export const app = new Hono<{ Bindings: Bindings & Env }>();
 
 export const BASE_API_URL = 'https://api.ethscriptions.com/v2';
 export const CACHE_TTL = 3600;
@@ -140,6 +149,42 @@ app.get('/', async (ctx) => {
   });
 });
 
+// app.get('/api/uploadthing', uploadthingHandler);
+// app.post('/api/uploadthing', uploadthingHandler);
+
+// async function uploadthingHandler(ctx: Context) {
+//   const env = envAdapter<Env>(ctx);
+
+//   const handlers = createRouteHandler({
+//     router: uploadRouter,
+//     config: {
+//       /**
+//        * Since workers doesn't have envs on `process`. We need to pass
+//        * secret and isDev flag manually.
+//        */
+//       token: env.UPLOADTHING_TOKEN,
+//       isDev: env.ENVIRONMENT === 'development',
+//       /*
+//        * Cloudflare Workers doesn't support the cache option
+//        * so we need to remove it from the request init.
+//        */
+//       fetch: (url, init) => {
+//         // eslint-disable-next-line no-param-reassign
+//         if (init && 'cache' in init) delete init.cache;
+
+//         return fetch(url, init);
+//       },
+//       /**
+//        * UploadThing dev server leaves some promises hanging around that we
+//        * need to wait for to prevent the worker from exiting prematurely.
+//        */
+//       handleDaemonPromise: (promise) => ctx.executionCtx.waitUntil(promise),
+//     },
+//   });
+
+//   return handlers(ctx.req.raw);
+// }
+
 export async function getPrices(type = 'normal') {
   try {
     const resp = await fetch(`https://www.ethgastracker.com/api/gas/latest`);
@@ -193,7 +238,7 @@ app.post('/estimate', async (c: Context) => {
   return estimateHandler(c, data, settings);
 });
 
-async function estimateHandler(ctx: Context, data: string, settings) {
+export async function estimateHandler(ctx: Context, data: string, settings) {
   const { error, result: res } = await estimateDataCost(data, settings);
 
   if (error) {
@@ -397,7 +442,7 @@ app.get('/profiles/:name/owned', profileHandler);
 app.get('/profiles/:name/info', profileHandler);
 app.get('/profiles/:name/latest', profileHandler);
 
-async function profileHandler(ctx: Context) {
+export async function profileHandler(ctx: Context) {
   const url = new URL(ctx.req.url);
   const name = ctx.req.param('name');
   const endpoint = url.pathname.split('/').pop() || '';
@@ -488,7 +533,7 @@ export async function listAllEthscriptionsHandler(ctx: Context) {
 
 app.get('/ethscriptions', listAllEthscriptionsHandler);
 
-async function ethscriptionByIdHandler(ctx: Context) {
+export async function ethscriptionByIdHandler(ctx: Context) {
   const config = (await initialNormalize(ctx)) as any;
   const { error, result } = config;
 
@@ -506,8 +551,8 @@ async function ethscriptionByIdHandler(ctx: Context) {
 
 app.get('/ethscriptions/:id', ethscriptionByIdHandler);
 
-async function ethscriptionSubHandler(ctx: Context) {
-  const type = ctx.req.param('type');
+export async function ethscriptionSubHandler(ctx: Context, _type?: string) {
+  const type = _type || ctx.req.param('type');
   const { error, result, url } = (await initialNormalize(ctx)) as any;
 
   if (error) {
@@ -598,7 +643,16 @@ async function ethscriptionSubHandler(ctx: Context) {
 
   return response;
 }
-app.get('/ethscriptions/:id/:type', ethscriptionSubHandler);
+app.get('/ethscriptions/:id/:type', (ctx) => ethscriptionSubHandler(ctx));
+
+// support for /content/:txhash, /data/:txhash, /meta/:txhash, /metadata/:txhash
+// similar to ordinals (allows for having static asset folders cached forever with cache control & immutable,
+// eg. in Nitro or other frameworks we can set fs folder `./public/ethscriptions`
+// full of 0x1234 files -> to resolve to `/content/0x1234` cached forever
+app.get('/content/:id', (ctx) => ethscriptionSubHandler(ctx, 'content'));
+app.get('/data/:id', (ctx) => ethscriptionSubHandler(ctx, 'data'));
+app.get('/meta/:id', (ctx) => ethscriptionSubHandler(ctx, 'meta'));
+app.get('/metadata/:id', (ctx) => ethscriptionSubHandler(ctx, 'metadata'));
 
 export function normalizeAndSortTransfers(result) {
   return (
@@ -665,7 +719,7 @@ export async function ensBasicOnchainHandler(
   });
 }
 
-async function ensApiHandler(val: string | `0x${string}`, options = {}) {
+export async function ensApiHandler(val: string | `0x${string}`, options = {}) {
   // if `val` is address, resolve to ens name
   const opts = { resolveName: val && val.startsWith('0x') && val.length === 42, ...options };
   const resp = await fetch(`https://api.ensdata.net/${val}`);
@@ -939,7 +993,9 @@ export function numfmt(x, delim = ',') {
     .join(delim);
 }
 
-export const getApp = () => app;
+export function getApp() {
+  return app;
+}
 
 /** @param {string} str */
 export function hex2bytes(str) {
