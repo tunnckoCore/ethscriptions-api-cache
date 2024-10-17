@@ -213,8 +213,6 @@ app.all(
       });
     }
 
-    console.log({ modifiers, upstreamUrl });
-
     return fetch(upstreamUrl);
     // const resp = await fetch(upstreamUrl);
     // return new Response(new Uint8Array(await resp.arrayBuffer()), {
