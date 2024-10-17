@@ -7,6 +7,7 @@ module.exports = {
   ...config.eslintConfig,
   rules: {
     ...config.eslintConfig.rules,
+    'no-param-reassign': 'off',
     '@typescript-eslint/triple-slash-reference': 'off',
     'unicorn/no-null': 'off',
     'unicorn/prevent-abbreviations': 'off',

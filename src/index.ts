@@ -1,3 +1,3 @@
-import { getApp } from './api.ts';
+import { getApp } from './server.ts';
 
 export default getApp();
