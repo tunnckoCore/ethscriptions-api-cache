@@ -15,7 +15,7 @@ import {
 
 import type { EnumAllDetailed } from 'ethscriptions/types.ts';
 
-import { getPrices } from 'ethscriptions/utils';
+import { getHeaders, getPrices } from 'ethscriptions/utils';
 import { Hono, type Context, type ValidationTargets } from 'hono';
 import { cors as corsMiddleware } from 'hono/cors';
 import { etag as etagMiddleware } from 'hono/etag';
@@ -171,6 +171,27 @@ function validate(target: keyof ValidationTargets, schema: z.ZodSchema<any>) {
     return res.data;
   });
 }
+
+app.all('/optimize/:modifiers/:data{.+}', async (ctx: Context) => {
+  const modifiers = ctx.req.param('modifiers');
+  const data = ctx.req.param('data');
+  const url = new URL(ctx.req.url);
+  const upstreamUrl = new URL(url.pathname.replace('/optimize', ''), 'https://ipx.wgw.lol');
+
+  if (
+    /basic|c?webp|multiple/gi.test(modifiers) &&
+    !/f_webp/.test(modifiers) &&
+    ctx.req.method === 'POST'
+  ) {
+    return fetch(upstreamUrl, {
+      method: 'POST',
+      body: JSON.stringify(await ctx.req.json()),
+      headers: getHeaders(3600 * 24 * 7, { 'Content-Type': 'application/json' }),
+    });
+  }
+
+  return fetch(upstreamUrl);
+});
 
 app.get(
   '/estimate/:data',
