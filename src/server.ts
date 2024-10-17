@@ -12,10 +12,9 @@ import {
   getUserProfile,
   resolveUser,
 } from 'ethscriptions';
-/* eslint-enable import/no-unresolved */
 
 import type { EnumAllDetailed } from 'ethscriptions/types.ts';
-/* eslint-disable import/no-unresolved */
+
 import { getPrices } from 'ethscriptions/utils';
 import { Hono, type Context, type ValidationTargets } from 'hono';
 import { cors as corsMiddleware } from 'hono/cors';
@@ -369,11 +368,11 @@ app.get(
             z.literal('content'),
             z.literal('transfer'),
             z.literal('transfers'),
-            z.literal('owner'),
-            z.literal('owners'),
             z.literal('index'),
             z.literal('number'),
             z.literal('info'),
+            z.literal('owner'),
+            z.literal('owners'),
             z.literal('creator'),
             z.literal('receiver'),
             z.literal('previous'),
