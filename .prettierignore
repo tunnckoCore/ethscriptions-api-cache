@@ -5,6 +5,8 @@ fixtures
 *.tsbuildinfo
 *.*cache
 
+*lock*
+
 # Build environment
 dist
 .cache

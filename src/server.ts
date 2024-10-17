@@ -1,3 +1,5 @@
+// ?NOTE: maybe switch to @hono/zod-openapi on next iteration
+import { zValidator } from '@hono/zod-validator';
 import {
   checkExists,
   estimateDataCost,
@@ -10,21 +12,18 @@ import {
   getUserProfile,
   resolveUser,
 } from 'ethscriptions';
-import { Hono, type Context, type ValidationTargets } from 'hono';
-import { z } from 'zod';
+/* eslint-enable import/no-unresolved */
 
-// ?NOTE: maybe switch to @hono/zod-openapi on next iteration
-import { zValidator } from '@hono/zod-validator';
-
+import type { EnumAllDetailed } from 'ethscriptions/types.ts';
 /* eslint-disable import/no-unresolved */
 import { getPrices } from 'ethscriptions/utils';
+import { Hono, type Context, type ValidationTargets } from 'hono';
 import { cors as corsMiddleware } from 'hono/cors';
 import { etag as etagMiddleware } from 'hono/etag';
 import { secureHeaders } from 'hono/secure-headers';
 import { trimTrailingSlash } from 'hono/trailing-slash';
-/* eslint-enable import/no-unresolved */
+import { z } from 'zod';
 
-import type { EnumAllDetailed } from 'ethscriptions/types.ts';
 import { ENDPOINTS } from './endpoints-docs.ts';
 
 const HexSchema = z.custom(
@@ -377,8 +376,11 @@ app.get(
             z.literal('info'),
             z.literal('creator'),
             z.literal('receiver'),
+            z.literal('previous'),
             z.literal('initial'),
-            z.literal('current'),
+            z.literal('initial_owner'),
+            z.literal('current_owner'),
+            z.literal('previous_owner'),
             z.literal('attachment'),
             z.literal('blob'),
           ])
