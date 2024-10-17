@@ -189,8 +189,8 @@ app.all(
       return new Response('Expected JSON or form-data', { status: 400 });
     }
     if (
-      /basic|c?webp|multiple/gi.test(modifiers) &&
-      !/f_webp/.test(modifiers) &&
+      /basic|multiple/gi.test(modifiers) &&
+      !/f_webp/i.test(modifiers) &&
       ctx.req.method === 'POST'
     ) {
       const isFormData = ctx.req.header('content-type')?.includes('multipart/form-data');
@@ -213,10 +213,13 @@ app.all(
       });
     }
 
-    const resp = await fetch(upstreamUrl);
-    return new Response(new Uint8Array(await resp.arrayBuffer()), {
-      headers: getHeaders(3600 * 24 * 7, { 'content-type': resp.headers.get('content-type') }),
-    });
+    console.log({ modifiers, upstreamUrl });
+
+    return fetch(upstreamUrl);
+    // const resp = await fetch(upstreamUrl);
+    // return new Response(new Uint8Array(await resp.arrayBuffer()), {
+    //   headers: getHeaders(3600 * 24 * 7, { 'content-type': resp.headers.get('content-type') }),
+    // });
   },
 );
 
