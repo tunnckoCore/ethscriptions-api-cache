@@ -86,6 +86,25 @@ function toHonoHandler(fn) {
   };
 }
 
+function validate(target: keyof ValidationTargets, schema: z.ZodSchema<any>) {
+  return zValidator(target, schema, (res, ctx: Context) => {
+    if (!res.success) {
+      return ctx.json(
+        {
+          error: {
+            message: 'Failure in validation',
+            httpStatus: 400,
+            issues: res.error.issues,
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    return res.data;
+  });
+}
+
 type Bindings = {
   COMMIT_SHA: string;
 };
@@ -153,45 +172,53 @@ app.get(
   toHonoHandler((ctx: Context) => getPrices(ctx.req.query('speed') || 'normal')),
 );
 
-function validate(target: keyof ValidationTargets, schema: z.ZodSchema<any>) {
-  return zValidator(target, schema, (res, ctx: Context) => {
-    if (!res.success) {
-      return ctx.json(
-        {
-          error: {
-            message: 'Failure in validation',
-            httpStatus: 400,
-            issues: res.error.issues,
-          },
-        },
-        { status: 400 },
-      );
+app.all(
+  '/optimize/:modifiers/:data{.+}',
+  validate(
+    'param',
+    z
+      .object({ data: DataURISchema.or(z.string().startsWith('http')), modifiers: z.string() })
+      .strict(),
+  ),
+  async (ctx: Context) => {
+    const modifiers = ctx.req.param('modifiers');
+    const data = ctx.req.param('data');
+    const url = new URL(ctx.req.url);
+    const upstreamUrl = new URL(url.pathname.replace('/optimize', ''), 'https://ipx.wgw.lol');
+    if (!data) {
+      return new Response('Expected JSON or form-data', { status: 400 });
+    }
+    if (
+      /basic|c?webp|multiple/gi.test(modifiers) &&
+      !/f_webp/.test(modifiers) &&
+      ctx.req.method === 'POST'
+    ) {
+      const isFormData = ctx.req.header('content-type')?.includes('multipart/form-data');
+      const isJSON = ctx.req.header('content-type')?.includes('application/json');
+
+      if (!isFormData && !isJSON) {
+        return new Response('Expected JSON or form-data', { status: 400 });
+      }
+
+      const body = isFormData ? await ctx.req.formData() : await ctx.req.json();
+
+      const resp = await fetch(upstreamUrl, {
+        method: 'POST',
+        body,
+        headers: ctx.req.raw.headers,
+      });
+
+      return new Response(new Uint8Array(await resp.arrayBuffer()), {
+        headers: getHeaders(3600 * 24 * 7, { 'content-type': resp.headers.get('content-type') }),
+      });
     }
 
-    return res.data;
-  });
-}
-
-app.all('/optimize/:modifiers/:data{.+}', async (ctx: Context) => {
-  const modifiers = ctx.req.param('modifiers');
-  const data = ctx.req.param('data');
-  const url = new URL(ctx.req.url);
-  const upstreamUrl = new URL(url.pathname.replace('/optimize', ''), 'https://ipx.wgw.lol');
-
-  if (
-    /basic|c?webp|multiple/gi.test(modifiers) &&
-    !/f_webp/.test(modifiers) &&
-    ctx.req.method === 'POST'
-  ) {
-    return fetch(upstreamUrl, {
-      method: 'POST',
-      body: JSON.stringify(await ctx.req.json()),
-      headers: getHeaders(3600 * 24 * 7, { 'Content-Type': 'application/json' }),
+    const resp = await fetch(upstreamUrl);
+    return new Response(new Uint8Array(await resp.arrayBuffer()), {
+      headers: getHeaders(3600 * 24 * 7, { 'content-type': resp.headers.get('content-type') }),
     });
-  }
-
-  return fetch(upstreamUrl);
-});
+  },
+);
 
 app.get(
   '/estimate/:data',
