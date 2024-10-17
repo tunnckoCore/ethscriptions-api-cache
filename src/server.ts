@@ -414,3 +414,4 @@ app.get(
 );
 
 export const getApp = () => app;
+export default app;

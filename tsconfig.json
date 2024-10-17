@@ -4,5 +4,6 @@
   "include": ["**/*.ts"],
   "compilerOptions": {
     "types": ["@cloudflare/workers-types/2023-07-01", "@types/bun"],
+    "baseUrl": ".",
   },
 }

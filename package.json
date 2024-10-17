@@ -1,6 +1,6 @@
 {
   "name": "@tunnckocore/ethscriptions-api-cache",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "license": "MPL-2.0",
   "description": "Ethscriptions API Cache Proxy. A Cloudflare Worker that caches and unifies Ethscriptions (or any other) API's responses, according to ESIP-9. Includes support for resolving ENS on-chain / off-chain names, and Ethscriptions names.",
   "author": "wgw <wgw@wgw.lol>",
@@ -15,12 +15,30 @@
   },
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./api": "./src/api.ts",
-    "./api.ts": "./src/api.ts"
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    },
+    "./server.js": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    },
+    "./index.ts": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./server.ts": {
+      "types": "./src/server.ts",
+      "default": "./src/server.ts"
+    }
   },
-  "main": "./src/api.ts",
   "files": [
+    "dist",
     "src"
   ],
   "engines": {
@@ -32,9 +50,11 @@
     "tag": "latest"
   },
   "scripts": {
+    "build": "rm -rf dist && tsup",
     "cf-typegen": "wrangler types",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
+    "prepublishOnly": "npm run build",
     "serve": "bun --watch src/index.ts",
     "start": "wrangler dev"
   },
@@ -49,6 +69,8 @@
     "@cloudflare/workers-types": "^4.20240925.0",
     "@types/bun": "^1.1.11",
     "eslint-config-tunnckocore": "^8.2.1",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.3",
     "viem": "^2.21.17",
     "wrangler": "^3.78.10"
   }
